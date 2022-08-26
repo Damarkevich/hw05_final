@@ -90,8 +90,8 @@ class PostCreateFormTest(TestCase):
         self.assertEqual(Post.objects.count(), post_count)
         self.assertEqual(Post.objects.get(pk=self.post.pk).text,
                          form_data['text'])
-        self.assertEqual(Post.objects.get(pk=self.post.pk).image.size,
-                         form_data['image'].size)
+        self.assertEqual(Post.objects.get(pk=self.post.pk).image.read(),
+                         self.small_gif)
 
     def test_create_comment(self):
         comment_count = Comment.objects.count()
