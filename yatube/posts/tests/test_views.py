@@ -3,15 +3,13 @@ import tempfile
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from ..models import Follow, Group, Post
+from ..models import Follow, Group, Post, User
 
-User = get_user_model()
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
@@ -22,6 +20,8 @@ class PostPagesTest(TestCase):
         super().setUpClass()
         cls.user = User.objects.create_user(username='username')
         cls.user2 = User.objects.create_user(username='username2')
+        cls.authorized_client = Client()
+        cls.authorized_other_client = Client()
         cls.group = Group.objects.create(
             title='Тестовая группа',
             slug='test-slug',
@@ -61,9 +61,7 @@ class PostPagesTest(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
-        self.authorized_other_client = Client()
         self.authorized_other_client.force_login(self.user2)
 
     def test_pages_uses_correct_template(self):
@@ -165,15 +163,21 @@ class PostPagesTest(TestCase):
                                    author=post_data['author'])
         response = self.client.get(reverse('posts:index'))
         cached_response_content = response.content
+        first_object = response.context['page_obj'][0]
+        self.assertEqual(first_object.text, post_data['text'])
         post.delete()
         self.assertEqual(cached_response_content, response.content)
         self.assertIn(post_data['text'].encode(), response.content)
+        first_object = response.context['page_obj'][0]
+        self.assertEqual(first_object.text, post_data['text'])
         cache.clear()
         response = self.client.get(reverse('posts:index'))
         self.assertNotEqual(cached_response_content, response.content)
         self.assertNotIn(post_data['text'].encode(), response.content)
+        first_object = response.context['page_obj'][0]
+        self.assertNotEqual(first_object.text, post_data['text'])
 
-    def test_follow_create_and_delete(self):
+    def test_follow_create(self):
         follow_count = Follow.objects.count()
         response = self.authorized_other_client.post(
             reverse('posts:profile_follow', args={self.user}),
@@ -188,13 +192,20 @@ class PostPagesTest(TestCase):
                 author=self.user,
             ).exists()
         )
+
+    def test_follow_delete(self):
+        response = self.authorized_other_client.post(
+            reverse('posts:profile_follow', args={self.user}),
+            follow=True,
+        )
+        follow_count = Follow.objects.count()
         response = self.authorized_other_client.post(
             reverse('posts:profile_unfollow', args={self.user}),
             follow=True,
         )
         self.assertRedirects(response,
                              reverse('posts:profile', args={self.user}))
-        self.assertEqual(Follow.objects.count(), follow_count)
+        self.assertEqual(Follow.objects.count(), follow_count - 1)
         self.assertFalse(
             Follow.objects.filter(
                 user=self.user2,

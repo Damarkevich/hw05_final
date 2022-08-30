@@ -1,9 +1,8 @@
 from django import forms
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-User = get_user_model()
+from ..models import User
 
 
 class UserPagesTest(TestCase):
@@ -11,9 +10,9 @@ class UserPagesTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='username')
+        cls.authorized_client = Client()
 
     def setUp(self):
-        self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
 
     def test_pages_uses_correct_template(self):
